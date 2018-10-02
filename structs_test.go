@@ -210,6 +210,25 @@ func TestMap_OmitEmpty(t *testing.T) {
 	}
 }
 
+func TestMap_Sensible(t *testing.T) {
+	type A struct {
+		Name  string
+		Value string `structs:",sensible"`
+	}
+	a := A{}
+
+	m := Map(a)
+
+	value, ok := m["Value"].(string)
+	if !ok {
+		t.Error("Map should contain the Value field that is tagged as sensible")
+	}
+
+	if value != "***" {
+		t.Errorf("Value of sensible field should be ***, got %s", value)
+	}
+}
+
 func TestMap_OmitNested(t *testing.T) {
 	type A struct {
 		Name  string

@@ -146,6 +146,10 @@ func (s *Struct) FillMap(out map[string]interface{}) {
 		} else {
 			out[name] = finalVal
 		}
+
+		if tagOpts.Has("sensible") {
+			out[name] = "***"
+		}
 	}
 }
 
