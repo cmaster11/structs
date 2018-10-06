@@ -104,6 +104,12 @@ func (s *Struct) FillMap(out map[string]interface{}) {
 			name = tagName
 		}
 
+		// if the field is sensible one, don't bother checking the content
+		if tagOpts.Has("sensible") {
+			out[name] = "***"
+			continue
+		}
+
 		// if the value is a zero value and the field is marked as omitempty do
 		// not include
 		if tagOpts.Has("omitempty") {
@@ -145,10 +151,6 @@ func (s *Struct) FillMap(out map[string]interface{}) {
 			}
 		} else {
 			out[name] = finalVal
-		}
-
-		if tagOpts.Has("sensible") {
-			out[name] = "***"
 		}
 	}
 }
