@@ -269,6 +269,7 @@ func TestMap_MapToStringComplex(t *testing.T) {
 		Name        string
 		Maaaap      map[string]interface{}
 		SensibleOne string `structs:",sensible"`
+		PtrOne      *string
 	}
 
 	strPtr := "Imma pointer"
@@ -292,6 +293,7 @@ func TestMap_MapToStringComplex(t *testing.T) {
 				Maaaap: map[string]interface{}{
 					"oh, another two": 2,
 				},
+				PtrOne: &strPtr,
 			},
 			"inn3":   "many inns!",
 			"ptr":    &strPtr,
@@ -300,15 +302,13 @@ func TestMap_MapToStringComplex(t *testing.T) {
 	}
 	ss := New(a)
 	ss.TranslateMapsToArrays = true
-	ss.MapToArrayFormat = "%+v: %#v"
-	ss.FollowPointersInMapToArray = true
 	m := ss.Map()
 
-	require.Contains(t, m["ManyInners"], "inn1: map[string]interface {}{\"Maaaap\":[]string{\"oh, another one: 1\"}, \"Name\":\"I am inner 1\", \"SensibleOne\":\"***\"}")
-	require.Contains(t, m["ManyInners"], "inn2: map[string]interface {}{\"Maaaap\":[]string{\"oh, another two: 2\"}, \"Name\":\"I am inner 2\", \"SensibleOne\":\"***\"}")
-	require.Contains(t, m["ManyInners"], "inn3: \"many inns!\"")
-	require.Contains(t, m["ManyInners"], "ptr: \"Imma pointer\"")
-	require.Contains(t, m["ManyInners"], "ptrNil: (*string)(nil)")
+	require.Contains(t, m["ManyInners"], "inn3: (string)many inns!")
+	require.Contains(t, m["ManyInners"], "ptr: (string)Imma pointer")
+	require.Contains(t, m["ManyInners"], "ptrNil: (*string)<nil>")
+	require.Contains(t, m["ManyInners"], "inn1: (map[string]interface {})map[Maaaap:([]string)[oh, another one: (int)1] Name:(string)I am inner 1 PtrOne:(*string)<nil> SensibleOne:(string)***]")
+	require.Contains(t, m["ManyInners"], "inn2: (map[string]interface {})map[Maaaap:([]string)[oh, another two: (int)2] Name:(string)I am inner 2 PtrOne:(*string)Imma pointer SensibleOne:(string)***]")
 }
 
 func TestMap_OmitNested(t *testing.T) {

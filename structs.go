@@ -4,14 +4,29 @@ package structs
 import (
 	"fmt"
 	"reflect"
+
+	"github.com/davecgh/go-spew/spew"
 )
+
+type DumpFunction func(format string, a ...interface{}) string
+
+var dumpInstance spew.ConfigState
+
+func init() {
+	dumpInstance = spew.ConfigState{
+		Indent:   " ",
+		SortKeys: true,
+		SpewKeys: false,
+	}
+}
 
 var (
 	// DefaultTagName is the default tag name for struct fields which provides
 	// a more granular to tweak certain structs. Lookup the necessary functions
 	// for more info.
-	DefaultTagName          = "structs" // struct's field default tag name
-	DefaultMapToArrayFormat = "%+v: %+v"
+	DefaultTagName                             = "structs" // struct's field default tag name
+	DefaultMapToArrayFormat                    = "%v: %#v"
+	DefaultMapToArrayDumpFunction DumpFunction = dumpInstance.Sprintf
 )
 
 // Struct encapsulates a struct type to provide several high level functions
@@ -29,20 +44,19 @@ type Struct struct {
 	TranslateMapsToArrays bool
 
 	// Format for the [TranslateMapsToArrays] option
-	MapToArrayFormat string
-
-	// If true, recursively follow pointers when performing map-to-array translation
-	FollowPointersInMapToArray bool
+	MapToArrayFormat       string
+	MapToArrayDumpFunction DumpFunction
 }
 
 // New returns a new *Struct with the struct s. It panics if the s's kind is
 // not struct.
 func New(s interface{}) *Struct {
 	return &Struct{
-		raw:              s,
-		value:            strctVal(s),
-		TagName:          DefaultTagName,
-		MapToArrayFormat: DefaultMapToArrayFormat,
+		raw:                    s,
+		value:                  strctVal(s),
+		TagName:                DefaultTagName,
+		MapToArrayFormat:       DefaultMapToArrayFormat,
+		MapToArrayDumpFunction: DefaultMapToArrayDumpFunction,
 	}
 }
 
@@ -140,7 +154,10 @@ func (s *Struct) FillMap(out map[string]interface{}) {
 			finalVal = s.nested(val)
 
 			v := reflect.ValueOf(val.Interface())
-			if v.Kind() == reflect.Ptr {
+			for {
+				if v.Kind() != reflect.Ptr || v.IsNil() {
+					break
+				}
 				v = v.Elem()
 			}
 
@@ -171,38 +188,31 @@ func (s *Struct) FillMap(out map[string]interface{}) {
 			for _, field := range keys {
 				value := val.MapIndex(field)
 				var valueToPrint interface{}
-				valueIntf := value.Interface()
-				valueIntfValue := reflect.ValueOf(valueIntf)
 
-				if s.FollowPointersInMapToArray {
-					for {
-						if valueIntfValue.Kind() != reflect.Ptr {
-							break
-						}
-
-						if valueIntfValue.IsNil() {
-							break
-						}
-
-						valueIntfValue = valueIntfValue.Elem()
-						valueIntf = valueIntfValue.Interface()
+				v := reflect.ValueOf(value.Interface())
+				for {
+					if v.Kind() != reflect.Ptr || v.IsNil() {
+						break
 					}
+					v = v.Elem()
 				}
 
-				if valueIntfValue.Kind() != reflect.Struct {
-					valueToPrint = valueIntf
+				if v.Kind() != reflect.Struct {
+					valueToPrint = v.Interface()
 				} else {
+					vIntf := v.Interface()
+
 					// Process value
 					valueMap := make(map[string]interface{})
 					innerStructs := *s
-					innerStructs.raw = valueIntf
-					innerStructs.value = strctVal(valueIntf)
+					innerStructs.raw = vIntf
+					innerStructs.value = strctVal(vIntf)
 					innerStructs.FillMap(valueMap)
 
 					valueToPrint = valueMap
 				}
 
-				arr = append(arr, fmt.Sprintf(s.MapToArrayFormat, field.Interface(), valueToPrint))
+				arr = append(arr, s.MapToArrayDumpFunction(s.MapToArrayFormat, field.Interface(), valueToPrint))
 			}
 
 			out[name] = arr
@@ -313,7 +323,10 @@ func (s *Struct) Names() []string {
 }
 
 func getFields(v reflect.Value, tagName string) []*Field {
-	if v.Kind() == reflect.Ptr {
+	for {
+		if v.Kind() != reflect.Ptr || v.IsNil() {
+			break
+		}
 		v = v.Elem()
 	}
 
@@ -499,7 +512,10 @@ func strctVal(s interface{}) reflect.Value {
 	v := reflect.ValueOf(s)
 
 	// if pointer get the underlying element≤
-	for v.Kind() == reflect.Ptr {
+	for {
+		if v.Kind() != reflect.Ptr || v.IsNil() {
+			break
+		}
 		v = v.Elem()
 	}
 
@@ -556,7 +572,10 @@ func HasZero(s interface{}) bool {
 // struct.
 func IsStruct(s interface{}) bool {
 	v := reflect.ValueOf(s)
-	if v.Kind() == reflect.Ptr {
+	for {
+		if v.Kind() != reflect.Ptr || v.IsNil() {
+			break
+		}
 		v = v.Elem()
 	}
 
@@ -580,7 +599,11 @@ func (s *Struct) nested(val reflect.Value) interface{} {
 	var finalVal interface{}
 
 	v := reflect.ValueOf(val.Interface())
-	if v.Kind() == reflect.Ptr {
+
+	for {
+		if v.Kind() != reflect.Ptr || v.IsNil() {
+			break
+		}
 		v = v.Elem()
 	}
 
@@ -604,7 +627,11 @@ func (s *Struct) nested(val reflect.Value) interface{} {
 		case reflect.Ptr, reflect.Array, reflect.Map,
 			reflect.Slice, reflect.Chan:
 			mapElem = val.Type().Elem()
-			if mapElem.Kind() == reflect.Ptr {
+
+			for {
+				if mapElem.Kind() != reflect.Ptr {
+					break
+				}
 				mapElem = mapElem.Elem()
 			}
 		}
