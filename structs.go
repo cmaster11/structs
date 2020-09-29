@@ -167,7 +167,24 @@ func (s *Struct) FillMap(out map[string]interface{}) {
 
 			for _, field := range keys {
 				value := val.MapIndex(field)
-				arr = append(arr, fmt.Sprintf(s.MapToArrayFormat, field.Interface(), value.Interface()))
+				var valueToPrint interface{}
+				valueIntf := value.Interface()
+				valueIntfValue := reflect.ValueOf(valueIntf)
+
+				if valueIntfValue.Kind() != reflect.Struct {
+					valueToPrint = valueIntf
+				} else {
+					// Process value
+					valueMap := make(map[string]interface{})
+					innerStructs := *s
+					innerStructs.raw = valueIntf
+					innerStructs.value = strctVal(valueIntf)
+					innerStructs.FillMap(valueMap)
+
+					valueToPrint = valueMap
+				}
+
+				arr = append(arr, fmt.Sprintf(s.MapToArrayFormat, field.Interface(), valueToPrint))
 			}
 
 			out[name] = arr

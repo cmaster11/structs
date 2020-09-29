@@ -266,29 +266,32 @@ func TestMap_MapToString(t *testing.T) {
 
 func TestMap_MapToStringComplex(t *testing.T) {
 	type Inner struct {
-		Name   string
-		Maaaap map[string]interface{}
+		Name        string
+		Maaaap      map[string]interface{}
+		SensibleOne string `structs:",sensible"`
 	}
 
 	type A struct {
 		Name       string
-		ManyInners map[string]Inner
+		ManyInners map[string]interface{}
 	}
 	a := A{
 		Name: "hello",
-		ManyInners: map[string]Inner{
-			"inn1": {
+		ManyInners: map[string]interface{}{
+			"inn1": Inner{
 				Name: "I am inner 1",
 				Maaaap: map[string]interface{}{
 					"oh, another one": 1,
 				},
+				SensibleOne: "delicate!",
 			},
-			"inn2": {
+			"inn2": Inner{
 				Name: "I am inner 2",
 				Maaaap: map[string]interface{}{
 					"oh, another two": 2,
 				},
 			},
+			"inn3": "many inns!",
 		},
 	}
 	ss := New(a)
@@ -296,7 +299,8 @@ func TestMap_MapToStringComplex(t *testing.T) {
 	ss.MapToArrayFormat = "%+v: %#v"
 	m := ss.Map()
 
-	require.Contains(t, m["ManyInners"], "inn1: structs.Inner{Name:\"I am inner 1\", Maaaap:map[string]interface {}{\"oh, another one\":1}}")
+	require.Contains(t, m["ManyInners"], "inn1: map[string]interface {}{\"Maaaap\":[]string{\"oh, another one: 1\"}, \"Name\":\"I am inner 1\", \"SensibleOne\":\"***\"}")
+	require.Contains(t, m["ManyInners"], "inn3: \"many inns!\"")
 }
 
 func TestMap_OmitNested(t *testing.T) {
