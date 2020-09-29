@@ -3,7 +3,6 @@ package structs
 
 import (
 	"fmt"
-
 	"reflect"
 )
 
@@ -20,6 +19,9 @@ type Struct struct {
 	raw     interface{}
 	value   reflect.Value
 	TagName string
+
+	// If true, `sensible` fields are not hidden
+	DisableSensible bool
 }
 
 // New returns a new *Struct with the struct s. It panics if the s's kind is
@@ -105,7 +107,7 @@ func (s *Struct) FillMap(out map[string]interface{}) {
 		}
 
 		// if the field is sensible one, don't bother checking the content
-		if tagOpts.Has("sensible") {
+		if tagOpts.Has("sensible") && !s.DisableSensible {
 			out[name] = "***"
 			continue
 		}
