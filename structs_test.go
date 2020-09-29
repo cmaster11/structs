@@ -5,6 +5,8 @@ import (
 	"reflect"
 	"testing"
 	"time"
+
+	"github.com/stretchr/testify/require"
 )
 
 func TestMapNonStruct(t *testing.T) {
@@ -227,6 +229,74 @@ func TestMap_Sensible(t *testing.T) {
 	if value != "***" {
 		t.Errorf("Value of sensible field should be ***, got %s", value)
 	}
+}
+
+func TestMap_MapToString(t *testing.T) {
+	type A struct {
+		Name   string
+		MyMap  map[string]string
+		MyMap2 map[interface{}]interface{}
+		MyMap3 map[string]interface{}
+	}
+	a := A{
+		MyMap: map[string]string{
+			"hello":  "123",
+			"hello2": "456",
+		},
+		MyMap2: map[interface{}]interface{}{
+			3: 4,
+			5: "oh my",
+		},
+		MyMap3: map[string]interface{}{
+			"hello": 123,
+		},
+	}
+	ss := New(a)
+	ss.TranslateMapsToArrays = true
+	m := ss.Map()
+
+	require.Contains(t, m["MyMap"], "hello: 123")
+	require.Contains(t, m["MyMap"], "hello2: 456")
+
+	require.Contains(t, m["MyMap2"], "3: 4")
+	require.Contains(t, m["MyMap2"], "5: oh my")
+
+	require.Contains(t, m["MyMap3"], "hello: 123")
+}
+
+func TestMap_MapToStringComplex(t *testing.T) {
+	type Inner struct {
+		Name   string
+		Maaaap map[string]interface{}
+	}
+
+	type A struct {
+		Name       string
+		ManyInners map[string]Inner
+	}
+	a := A{
+		Name: "hello",
+		ManyInners: map[string]Inner{
+			"inn1": {
+				Name: "I am inner 1",
+				Maaaap: map[string]interface{}{
+					"oh, another one": 1,
+				},
+			},
+			"inn2": {
+				Name: "I am inner 2",
+				Maaaap: map[string]interface{}{
+					"oh, another two": 2,
+				},
+			},
+		},
+	}
+	ss := New(a)
+	ss.TranslateMapsToArrays = true
+	ss.MapToArrayFormat = "%+v: %#v"
+	m := ss.Map()
+
+	require.Contains(t, m["ManyInners"], "inn1: structs.Inner{Name:\"I am inner 1\", Maaaap:map[string]interface {}{\"oh, another one\":1}}")
 }
 
 func TestMap_OmitNested(t *testing.T) {

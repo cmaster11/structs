@@ -10,7 +10,8 @@ var (
 	// DefaultTagName is the default tag name for struct fields which provides
 	// a more granular to tweak certain structs. Lookup the necessary functions
 	// for more info.
-	DefaultTagName = "structs" // struct's field default tag name
+	DefaultTagName          = "structs" // struct's field default tag name
+	DefaultMapToArrayFormat = "%+v: %+v"
 )
 
 // Struct encapsulates a struct type to provide several high level functions
@@ -22,15 +23,23 @@ type Struct struct {
 
 	// If true, `sensible` fields are not hidden
 	DisableSensible bool
+
+	// If true, map[...]... are translated to textual arrays of:
+	// - key: value
+	TranslateMapsToArrays bool
+
+	// Format for the previous option
+	MapToArrayFormat string
 }
 
 // New returns a new *Struct with the struct s. It panics if the s's kind is
 // not struct.
 func New(s interface{}) *Struct {
 	return &Struct{
-		raw:     s,
-		value:   strctVal(s),
-		TagName: DefaultTagName,
+		raw:              s,
+		value:            strctVal(s),
+		TagName:          DefaultTagName,
+		MapToArrayFormat: DefaultMapToArrayFormat,
 	}
 }
 
@@ -99,6 +108,7 @@ func (s *Struct) FillMap(out map[string]interface{}) {
 		name := field.Name
 		val := s.value.FieldByName(name)
 		isSubStruct := false
+		isMap := false
 		var finalVal interface{}
 
 		tagName, tagOpts := parseTag(field.Tag.Get(s.TagName))
@@ -132,7 +142,10 @@ func (s *Struct) FillMap(out map[string]interface{}) {
 			}
 
 			switch v.Kind() {
-			case reflect.Map, reflect.Struct:
+			case reflect.Map:
+				isMap = true
+				fallthrough
+			case reflect.Struct:
 				isSubStruct = true
 			}
 		} else {
@@ -144,6 +157,20 @@ func (s *Struct) FillMap(out map[string]interface{}) {
 			if ok {
 				out[name] = s.String()
 			}
+			continue
+		}
+
+		if isMap && s.TranslateMapsToArrays {
+			keys := val.MapKeys()
+
+			var arr []string
+
+			for _, field := range keys {
+				value := val.MapIndex(field)
+				arr = append(arr, fmt.Sprintf(s.MapToArrayFormat, field.Interface(), value.Interface()))
+			}
+
+			out[name] = arr
 			continue
 		}
 
