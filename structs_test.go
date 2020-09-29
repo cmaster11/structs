@@ -271,6 +271,8 @@ func TestMap_MapToStringComplex(t *testing.T) {
 		SensibleOne string `structs:",sensible"`
 	}
 
+	strPtr := "Imma pointer"
+
 	type A struct {
 		Name       string
 		ManyInners map[string]interface{}
@@ -285,22 +287,28 @@ func TestMap_MapToStringComplex(t *testing.T) {
 				},
 				SensibleOne: "delicate!",
 			},
-			"inn2": Inner{
+			"inn2": &Inner{
 				Name: "I am inner 2",
 				Maaaap: map[string]interface{}{
 					"oh, another two": 2,
 				},
 			},
-			"inn3": "many inns!",
+			"inn3":   "many inns!",
+			"ptr":    &strPtr,
+			"ptrNil": (*string)(nil),
 		},
 	}
 	ss := New(a)
 	ss.TranslateMapsToArrays = true
 	ss.MapToArrayFormat = "%+v: %#v"
+	ss.FollowPointersInMapToArray = true
 	m := ss.Map()
 
 	require.Contains(t, m["ManyInners"], "inn1: map[string]interface {}{\"Maaaap\":[]string{\"oh, another one: 1\"}, \"Name\":\"I am inner 1\", \"SensibleOne\":\"***\"}")
+	require.Contains(t, m["ManyInners"], "inn2: map[string]interface {}{\"Maaaap\":[]string{\"oh, another two: 2\"}, \"Name\":\"I am inner 2\", \"SensibleOne\":\"***\"}")
 	require.Contains(t, m["ManyInners"], "inn3: \"many inns!\"")
+	require.Contains(t, m["ManyInners"], "ptr: \"Imma pointer\"")
+	require.Contains(t, m["ManyInners"], "ptrNil: (*string)(nil)")
 }
 
 func TestMap_OmitNested(t *testing.T) {

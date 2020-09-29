@@ -28,8 +28,11 @@ type Struct struct {
 	// - key: value
 	TranslateMapsToArrays bool
 
-	// Format for the previous option
+	// Format for the [TranslateMapsToArrays] option
 	MapToArrayFormat string
+
+	// If true, recursively follow pointers when performing map-to-array translation
+	FollowPointersInMapToArray bool
 }
 
 // New returns a new *Struct with the struct s. It panics if the s's kind is
@@ -170,6 +173,21 @@ func (s *Struct) FillMap(out map[string]interface{}) {
 				var valueToPrint interface{}
 				valueIntf := value.Interface()
 				valueIntfValue := reflect.ValueOf(valueIntf)
+
+				if s.FollowPointersInMapToArray {
+					for {
+						if valueIntfValue.Kind() != reflect.Ptr {
+							break
+						}
+
+						if valueIntfValue.IsNil() {
+							break
+						}
+
+						valueIntfValue = valueIntfValue.Elem()
+						valueIntf = valueIntfValue.Interface()
+					}
+				}
 
 				if valueIntfValue.Kind() != reflect.Struct {
 					valueToPrint = valueIntf
