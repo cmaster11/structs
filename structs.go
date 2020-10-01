@@ -621,9 +621,13 @@ func (s *Struct) nested(val reflect.Value) interface{} {
 
 	switch v.Kind() {
 	case reflect.Struct:
-		n := New(val.Interface())
-		n.TagName = s.TagName
-		m := n.Map()
+		vIntf := val.Interface()
+
+		innerStructs := *s
+		innerStructs.raw = vIntf
+		innerStructs.value = strctVal(vIntf)
+
+		m := innerStructs.Map()
 
 		// do not add the converted value if there are no exported fields, ie:
 		// time.Time

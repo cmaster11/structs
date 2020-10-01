@@ -265,6 +265,8 @@ func TestMap_MapToArray(t *testing.T) {
 	require.Contains(t, m["MyMap3"], "hello: 123")
 }
 
+type CustomMapType map[string]interface{}
+
 func TestMap_MapToArrayComplex(t *testing.T) {
 	type Inner struct {
 		Name        string
@@ -272,6 +274,10 @@ func TestMap_MapToArrayComplex(t *testing.T) {
 		NilMap      *map[string]interface{}
 		SensibleOne string `structs:",sensible"`
 		PtrOne      *string
+	}
+
+	type InnerWrapper struct {
+		AnotherInner *Inner
 	}
 
 	strPtr := "Imma pointer"
@@ -286,9 +292,11 @@ func TestMap_MapToArrayComplex(t *testing.T) {
 	}
 
 	type A struct {
-		Name       string
-		ManyInners map[string]interface{}
-		FromNull   map[string]interface{}
+		Name             string
+		ManyInners       map[string]interface{}
+		FromNull         map[string]interface{}
+		CustomMapTypeMap map[string]interface{}
+		InnerWrapper     *InnerWrapper
 	}
 	a := A{
 		Name: "hello",
@@ -320,6 +328,22 @@ func TestMap_MapToArrayComplex(t *testing.T) {
 			"ptrNil": (*string)(nil),
 		},
 		FromNull: castFromNull,
+		CustomMapTypeMap: map[string]interface{}{
+			"custom1": CustomMapType{
+				"test": map[string]interface{}{
+					"asd": "lol",
+					"oh!": 4,
+				},
+			},
+		},
+		InnerWrapper: &InnerWrapper{
+			AnotherInner: &Inner{
+				Name: "soInner",
+				Maaaap: map[string]interface{}{
+					"teeeeest": 123,
+				},
+			},
+		},
 	}
 	ss := New(a)
 	ss.TranslateMapsToArrays = true
@@ -332,6 +356,7 @@ func TestMap_MapToArrayComplex(t *testing.T) {
 	require.Contains(t, m["ManyInners"], `inn2: (map[string]interface {})map[Maaaap:([]string)[oh, another two: (int)2] Name:(string)I am inner 2 NilMap:(*map[string]interface {})<nil> PtrOne:(*string)Imma pointer SensibleOne:(string)***]`)
 	require.Contains(t, m["FromNull"], "remaining: (float64)42")
 	require.Contains(t, m["FromNull"], "usedDecimal: (interface {})<nil>")
+	require.Contains(t, m["CustomMapTypeMap"], `custom1: (structs.CustomMapType)map[test:(map[string]interface {})map[asd:(string)lol oh!:(int)4]]`)
 }
 
 func TestMap_OmitNested(t *testing.T) {
