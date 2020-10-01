@@ -357,6 +357,10 @@ func TestMap_MapToArrayComplex(t *testing.T) {
 	require.Contains(t, m["FromNull"], "remaining: (float64)42")
 	require.Contains(t, m["FromNull"], "usedDecimal: (interface {})<nil>")
 	require.Contains(t, m["CustomMapTypeMap"], `custom1: (structs.CustomMapType)map[test:(map[string]interface {})map[asd:(string)lol oh!:(int)4]]`)
+
+	require.Contains(t, m["InnerWrapper"], "AnotherInner")
+	require.Contains(t, m["InnerWrapper"].(map[string]interface{})["AnotherInner"], "Maaaap")
+	require.Contains(t, m["InnerWrapper"].(map[string]interface{})["AnotherInner"].(map[string]interface{})["Maaaap"], `teeeeest: (int)123`)
 }
 
 func TestMap_OmitNested(t *testing.T) {
