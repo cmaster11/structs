@@ -1604,3 +1604,37 @@ func TestMap_InterfaceTypeWithMapValue(t *testing.T) {
 
 	_ = Map(a)
 }
+
+func TestTagYAML(t *testing.T) {
+	type Inner struct {
+		AnotherName string
+		MyMap       map[string]interface{} `structs:",yaml"`
+	}
+
+	type A struct {
+		Name   string
+		Nested *Inner
+	}
+
+	a := A{
+		Name: "hello",
+		Nested: &Inner{
+			AnotherName: "ohhh",
+			MyMap: map[string]interface{}{
+				"test1": 123,
+				"test2": map[string]interface{}{
+					"yeee": "lol",
+				},
+			},
+		},
+	}
+
+	ss := New(a)
+	m := ss.Map()
+
+	require.Equal(t, m["Name"], "hello")
+	require.Contains(t, m["Nested"], "AnotherName")
+	require.Contains(t, m["Nested"], "MyMap")
+	require.Equal(t, m["Nested"].(map[string]interface{})["AnotherName"], "ohhh")
+	require.Equal(t, m["Nested"].(map[string]interface{})["MyMap"], "test1: 123\ntest2:\n    yeee: lol")
+}

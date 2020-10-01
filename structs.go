@@ -3,10 +3,13 @@ package structs
 
 import (
 	"fmt"
+	"log"
 	"reflect"
 	"sort"
+	"strings"
 
 	"github.com/davecgh/go-spew/spew"
+	"gopkg.in/yaml.v3"
 )
 
 type DumpFunction func(format string, a ...interface{}) string
@@ -149,6 +152,17 @@ func (s *Struct) FillMap(out map[string]interface{}) {
 			if reflect.DeepEqual(current, zero) {
 				continue
 			}
+		}
+
+		if tagOpts.Has("yaml") {
+			yamlBytes, err := yaml.Marshal(val.Interface())
+			if err != nil {
+				log.Printf("[structs] failed to marshal yaml: %s", err)
+				continue
+			}
+
+			out[name] = strings.TrimSpace(string(yamlBytes))
+			continue
 		}
 
 		if !tagOpts.Has("omitnested") {
