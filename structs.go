@@ -4,6 +4,7 @@ package structs
 import (
 	"fmt"
 	"reflect"
+	"sort"
 
 	"github.com/davecgh/go-spew/spew"
 )
@@ -189,31 +190,42 @@ func (s *Struct) FillMap(out map[string]interface{}) {
 				value := val.MapIndex(field)
 				var valueToPrint interface{}
 
-				v := reflect.ValueOf(value.Interface())
-				for {
-					if v.Kind() != reflect.Ptr || v.IsNil() {
-						break
-					}
-					v = v.Elem()
-				}
+				intfValue := value.Interface()
+				v := reflect.ValueOf(intfValue)
+				vKind := v.Kind()
 
-				if v.Kind() != reflect.Struct {
-					valueToPrint = v.Interface()
+				if vKind == reflect.Invalid {
+					valueToPrint = intfValue
 				} else {
-					vIntf := v.Interface()
 
-					// Process value
-					valueMap := make(map[string]interface{})
-					innerStructs := *s
-					innerStructs.raw = vIntf
-					innerStructs.value = strctVal(vIntf)
-					innerStructs.FillMap(valueMap)
+					for {
+						if v.Kind() != reflect.Ptr || v.IsNil() {
+							break
+						}
+						v = v.Elem()
+					}
 
-					valueToPrint = valueMap
+					if v.Kind() != reflect.Struct {
+						valueToPrint = v.Interface()
+					} else {
+						vIntf := v.Interface()
+
+						// Process value
+						valueMap := make(map[string]interface{})
+						innerStructs := *s
+						innerStructs.raw = vIntf
+						innerStructs.value = strctVal(vIntf)
+						innerStructs.FillMap(valueMap)
+
+						valueToPrint = valueMap
+					}
 				}
 
 				arr = append(arr, s.MapToArrayDumpFunction(s.MapToArrayFormat, field.Interface(), valueToPrint))
 			}
+
+			// Sort it all
+			sort.Strings(arr)
 
 			out[name] = arr
 			continue

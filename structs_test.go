@@ -1,6 +1,7 @@
 package structs
 
 import (
+	"encoding/json"
 	"fmt"
 	"reflect"
 	"testing"
@@ -231,7 +232,7 @@ func TestMap_Sensible(t *testing.T) {
 	}
 }
 
-func TestMap_MapToString(t *testing.T) {
+func TestMap_MapToArray(t *testing.T) {
 	type A struct {
 		Name   string
 		MyMap  map[string]string
@@ -264,19 +265,30 @@ func TestMap_MapToString(t *testing.T) {
 	require.Contains(t, m["MyMap3"], "hello: 123")
 }
 
-func TestMap_MapToStringComplex(t *testing.T) {
+func TestMap_MapToArrayComplex(t *testing.T) {
 	type Inner struct {
 		Name        string
 		Maaaap      map[string]interface{}
+		NilMap      *map[string]interface{}
 		SensibleOne string `structs:",sensible"`
 		PtrOne      *string
 	}
 
 	strPtr := "Imma pointer"
 
+	intZero := 0
+	intOne := 1
+
+	castFromNull := make(map[string]interface{})
+	{
+		argsToCast := `{"remaining":42,"usedDecimal":null}`
+		require.NoError(t, json.Unmarshal([]byte(argsToCast), &castFromNull))
+	}
+
 	type A struct {
 		Name       string
 		ManyInners map[string]interface{}
+		FromNull   map[string]interface{}
 	}
 	a := A{
 		Name: "hello",
@@ -285,6 +297,14 @@ func TestMap_MapToStringComplex(t *testing.T) {
 				Name: "I am inner 1",
 				Maaaap: map[string]interface{}{
 					"oh, another one": 1,
+					"empty":           map[string]interface{}(nil),
+					"weirdPtr": map[string]interface{}{
+						"idx":     (*int)(nil),
+						"intZero": &intZero,
+						"intOne":  &intOne,
+						"intfNil": interface{}(nil),
+					},
+					"fromNull": castFromNull,
 				},
 				SensibleOne: "delicate!",
 			},
@@ -299,6 +319,7 @@ func TestMap_MapToStringComplex(t *testing.T) {
 			"ptr":    &strPtr,
 			"ptrNil": (*string)(nil),
 		},
+		FromNull: castFromNull,
 	}
 	ss := New(a)
 	ss.TranslateMapsToArrays = true
@@ -307,8 +328,10 @@ func TestMap_MapToStringComplex(t *testing.T) {
 	require.Contains(t, m["ManyInners"], "inn3: (string)many inns!")
 	require.Contains(t, m["ManyInners"], "ptr: (string)Imma pointer")
 	require.Contains(t, m["ManyInners"], "ptrNil: (*string)<nil>")
-	require.Contains(t, m["ManyInners"], "inn1: (map[string]interface {})map[Maaaap:([]string)[oh, another one: (int)1] Name:(string)I am inner 1 PtrOne:(*string)<nil> SensibleOne:(string)***]")
-	require.Contains(t, m["ManyInners"], "inn2: (map[string]interface {})map[Maaaap:([]string)[oh, another two: (int)2] Name:(string)I am inner 2 PtrOne:(*string)Imma pointer SensibleOne:(string)***]")
+	require.Contains(t, m["ManyInners"], `inn1: (map[string]interface {})map[Maaaap:([]string)[empty: (map[string]interface {})<nil> fromNull: (map[string]interface {})map[remaining:(float64)42 usedDecimal:(interface {})<nil>] oh, another one: (int)1 weirdPtr: (map[string]interface {})map[idx:(*int)<nil> intOne:(*int)1 intZero:(*int)0 intfNil:(interface {})<nil>]] Name:(string)I am inner 1 NilMap:(*map[string]interface {})<nil> PtrOne:(*string)<nil> SensibleOne:(string)***]`)
+	require.Contains(t, m["ManyInners"], `inn2: (map[string]interface {})map[Maaaap:([]string)[oh, another two: (int)2] Name:(string)I am inner 2 NilMap:(*map[string]interface {})<nil> PtrOne:(*string)Imma pointer SensibleOne:(string)***]`)
+	require.Contains(t, m["FromNull"], "remaining: (float64)42")
+	require.Contains(t, m["FromNull"], "usedDecimal: (interface {})<nil>")
 }
 
 func TestMap_OmitNested(t *testing.T) {
