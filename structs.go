@@ -5,32 +5,17 @@ import (
 	"fmt"
 	"log"
 	"reflect"
-	"sort"
 	"strings"
 
 	"github.com/davecgh/go-spew/spew"
 	"gopkg.in/yaml.v3"
 )
 
-type DumpFunction func(format string, a ...interface{}) string
-
-var dumpInstance spew.ConfigState
-
-func init() {
-	dumpInstance = spew.ConfigState{
-		Indent:   " ",
-		SortKeys: true,
-		SpewKeys: false,
-	}
-}
-
 var (
 	// DefaultTagName is the default tag name for struct fields which provides
 	// a more granular to tweak certain structs. Lookup the necessary functions
 	// for more info.
-	DefaultTagName                             = "structs" // struct's field default tag name
-	DefaultMapToArrayFormat                    = "%v: %#v"
-	DefaultMapToArrayDumpFunction DumpFunction = dumpInstance.Sprintf
+	DefaultTagName = "structs" // struct's field default tag name
 )
 
 // Struct encapsulates a struct type to provide several high level functions
@@ -42,25 +27,15 @@ type Struct struct {
 
 	// If true, `sensible` fields are not hidden
 	DisableSensible bool
-
-	// If true, map[...]... are translated to textual arrays of:
-	// - key: value
-	TranslateMapsToArrays bool
-
-	// Format for the [TranslateMapsToArrays] option
-	MapToArrayFormat       string
-	MapToArrayDumpFunction DumpFunction
 }
 
 // New returns a new *Struct with the struct s. It panics if the s's kind is
 // not struct.
 func New(s interface{}) *Struct {
 	return &Struct{
-		raw:                    s,
-		value:                  strctVal(s),
-		TagName:                DefaultTagName,
-		MapToArrayFormat:       DefaultMapToArrayFormat,
-		MapToArrayDumpFunction: DefaultMapToArrayDumpFunction,
+		raw:     s,
+		value:   strctVal(s),
+		TagName: DefaultTagName,
 	}
 }
 
@@ -116,6 +91,55 @@ func (s *Struct) Map() map[string]interface{} {
 	return out
 }
 
+func (s *Struct) checkYAML(tagOpts tagOptions, value interface{}) interface{} {
+	if tagOpts.Has("yaml") {
+		yamlBytes, err := yaml.Marshal(value)
+		if err != nil {
+			log.Printf("[structs] failed to marshal yaml: %s", err)
+			return spew.Sprintf("%#v", value)
+		}
+
+		return strings.TrimSpace(string(yamlBytes))
+	}
+
+	return value
+}
+
+func (s *Struct) getMapValueToPrint(value reflect.Value) interface{} {
+	var valueToPrint interface{}
+
+	valueKind := value.Kind()
+
+	if valueKind == reflect.Invalid {
+		return value.Interface()
+	}
+
+	v := value
+	for {
+		if v.Kind() != reflect.Ptr || v.IsNil() {
+			break
+		}
+		v = v.Elem()
+	}
+
+	if v.Kind() != reflect.Struct {
+		valueToPrint = v.Interface()
+	} else {
+		vIntf := v.Interface()
+
+		// Process value
+		valueMap := make(map[string]interface{})
+		innerStructs := *s
+		innerStructs.raw = vIntf
+		innerStructs.value = strctVal(vIntf)
+		innerStructs.FillMap(valueMap)
+
+		valueToPrint = valueMap
+	}
+
+	return valueToPrint
+}
+
 // FillMap is the same as Map. Instead of returning the output, it fills the
 // given map.
 func (s *Struct) FillMap(out map[string]interface{}) {
@@ -129,7 +153,6 @@ func (s *Struct) FillMap(out map[string]interface{}) {
 		name := field.Name
 		val := s.value.FieldByName(name)
 		isSubStruct := false
-		isMap := false
 		var finalVal interface{}
 
 		tagName, tagOpts := parseTag(field.Tag.Get(s.TagName))
@@ -154,18 +177,9 @@ func (s *Struct) FillMap(out map[string]interface{}) {
 			}
 		}
 
-		if tagOpts.Has("yaml") {
-			yamlBytes, err := yaml.Marshal(val.Interface())
-			if err != nil {
-				log.Printf("[structs] failed to marshal yaml: %s", err)
-				continue
-			}
-
-			out[name] = strings.TrimSpace(string(yamlBytes))
-			continue
-		}
-
-		if !tagOpts.Has("omitnested") {
+		if tagOpts.Has("omitnested") {
+			finalVal = val.Interface()
+		} else {
 			finalVal = s.nested(val)
 
 			v := reflect.ValueOf(val.Interface())
@@ -177,14 +191,9 @@ func (s *Struct) FillMap(out map[string]interface{}) {
 			}
 
 			switch v.Kind() {
-			case reflect.Map:
-				isMap = true
-				fallthrough
-			case reflect.Struct:
+			case reflect.Map, reflect.Struct:
 				isSubStruct = true
 			}
-		} else {
-			finalVal = val.Interface()
 		}
 
 		if tagOpts.Has("string") {
@@ -195,62 +204,12 @@ func (s *Struct) FillMap(out map[string]interface{}) {
 			continue
 		}
 
-		if isMap && s.TranslateMapsToArrays {
-			keys := val.MapKeys()
-
-			var arr []string
-
-			for _, field := range keys {
-				value := val.MapIndex(field)
-				var valueToPrint interface{}
-
-				intfValue := value.Interface()
-				v := reflect.ValueOf(intfValue)
-				vKind := v.Kind()
-
-				if vKind == reflect.Invalid {
-					valueToPrint = intfValue
-				} else {
-
-					for {
-						if v.Kind() != reflect.Ptr || v.IsNil() {
-							break
-						}
-						v = v.Elem()
-					}
-
-					if v.Kind() != reflect.Struct {
-						valueToPrint = v.Interface()
-					} else {
-						vIntf := v.Interface()
-
-						// Process value
-						valueMap := make(map[string]interface{})
-						innerStructs := *s
-						innerStructs.raw = vIntf
-						innerStructs.value = strctVal(vIntf)
-						innerStructs.FillMap(valueMap)
-
-						valueToPrint = valueMap
-					}
-				}
-
-				arr = append(arr, s.MapToArrayDumpFunction(s.MapToArrayFormat, field.Interface(), valueToPrint))
-			}
-
-			// Sort it all
-			sort.Strings(arr)
-
-			out[name] = arr
-			continue
-		}
-
 		if isSubStruct && (tagOpts.Has("flatten")) {
 			for k := range finalVal.(map[string]interface{}) {
-				out[k] = finalVal.(map[string]interface{})[k]
+				out[k] = s.checkYAML(tagOpts, finalVal.(map[string]interface{})[k])
 			}
 		} else {
-			out[name] = finalVal
+			out[name] = s.checkYAML(tagOpts, finalVal)
 		}
 	}
 }
@@ -624,7 +583,8 @@ func Name(s interface{}) string {
 func (s *Struct) nested(val reflect.Value) interface{} {
 	var finalVal interface{}
 
-	v := reflect.ValueOf(val.Interface())
+	valIntf := val.Interface()
+	v := reflect.ValueOf(valIntf)
 
 	for {
 		if v.Kind() != reflect.Ptr || v.IsNil() {
@@ -653,7 +613,8 @@ func (s *Struct) nested(val reflect.Value) interface{} {
 	case reflect.Map:
 		// get the element type of the map
 		mapElem := val.Type()
-		switch val.Type().Kind() {
+		kind := mapElem.Kind()
+		switch kind {
 		case reflect.Ptr, reflect.Array, reflect.Map,
 			reflect.Slice, reflect.Chan:
 			mapElem = val.Type().Elem()
@@ -666,34 +627,18 @@ func (s *Struct) nested(val reflect.Value) interface{} {
 			}
 		}
 
-		// only iterate over struct types, ie: map[string]StructType,
-		// map[string][]StructType,
-		if mapElem.Kind() == reflect.Struct ||
-			(mapElem.Kind() == reflect.Slice &&
-				mapElem.Elem().Kind() == reflect.Struct) {
-			m := make(map[string]interface{}, val.Len())
-			for _, k := range val.MapKeys() {
-				m[k.String()] = s.nested(val.MapIndex(k))
-			}
-			finalVal = m
-			break
-		}
-
-		// TODO(arslan): should this be optional?
-		finalVal = val.Interface()
-	case reflect.Slice, reflect.Array:
 		if val.Type().Kind() == reflect.Interface {
 			finalVal = val.Interface()
 			break
 		}
 
-		// TODO(arslan): should this be optional?
-		// do not iterate of non struct types, just pass the value. Ie: []int,
-		// []string, co... We only iterate further if it's a struct.
-		// i.e []foo or []*foo
-		if val.Type().Elem().Kind() != reflect.Struct &&
-			!(val.Type().Elem().Kind() == reflect.Ptr &&
-				val.Type().Elem().Elem().Kind() == reflect.Struct) {
+		m := make(map[string]interface{}, val.Len())
+		for _, k := range val.MapKeys() {
+			m[k.String()] = s.nested(val.MapIndex(k))
+		}
+		finalVal = m
+	case reflect.Slice, reflect.Array:
+		if val.Type().Kind() == reflect.Interface {
 			finalVal = val.Interface()
 			break
 		}

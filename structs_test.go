@@ -1,7 +1,6 @@
 package structs
 
 import (
-	"encoding/json"
 	"fmt"
 	"reflect"
 	"testing"
@@ -232,137 +231,6 @@ func TestMap_Sensible(t *testing.T) {
 	}
 }
 
-func TestMap_MapToArray(t *testing.T) {
-	type A struct {
-		Name   string
-		MyMap  map[string]string
-		MyMap2 map[interface{}]interface{}
-		MyMap3 map[string]interface{}
-	}
-	a := A{
-		MyMap: map[string]string{
-			"hello":  "123",
-			"hello2": "456",
-		},
-		MyMap2: map[interface{}]interface{}{
-			3: 4,
-			5: "oh my",
-		},
-		MyMap3: map[string]interface{}{
-			"hello": 123,
-		},
-	}
-	ss := New(a)
-	ss.TranslateMapsToArrays = true
-	m := ss.Map()
-
-	require.Contains(t, m["MyMap"], "hello: 123")
-	require.Contains(t, m["MyMap"], "hello2: 456")
-
-	require.Contains(t, m["MyMap2"], "3: 4")
-	require.Contains(t, m["MyMap2"], "5: oh my")
-
-	require.Contains(t, m["MyMap3"], "hello: 123")
-}
-
-type CustomMapType map[string]interface{}
-
-func TestMap_MapToArrayComplex(t *testing.T) {
-	type Inner struct {
-		Name        string
-		Maaaap      map[string]interface{}
-		NilMap      *map[string]interface{}
-		SensibleOne string `structs:",sensible"`
-		PtrOne      *string
-	}
-
-	type InnerWrapper struct {
-		AnotherInner *Inner
-	}
-
-	strPtr := "Imma pointer"
-
-	intZero := 0
-	intOne := 1
-
-	castFromNull := make(map[string]interface{})
-	{
-		argsToCast := `{"remaining":42,"usedDecimal":null}`
-		require.NoError(t, json.Unmarshal([]byte(argsToCast), &castFromNull))
-	}
-
-	type A struct {
-		Name             string
-		ManyInners       map[string]interface{}
-		FromNull         map[string]interface{}
-		CustomMapTypeMap map[string]interface{}
-		InnerWrapper     *InnerWrapper
-	}
-	a := A{
-		Name: "hello",
-		ManyInners: map[string]interface{}{
-			"inn1": Inner{
-				Name: "I am inner 1",
-				Maaaap: map[string]interface{}{
-					"oh, another one": 1,
-					"empty":           map[string]interface{}(nil),
-					"weirdPtr": map[string]interface{}{
-						"idx":     (*int)(nil),
-						"intZero": &intZero,
-						"intOne":  &intOne,
-						"intfNil": interface{}(nil),
-					},
-					"fromNull": castFromNull,
-				},
-				SensibleOne: "delicate!",
-			},
-			"inn2": &Inner{
-				Name: "I am inner 2",
-				Maaaap: map[string]interface{}{
-					"oh, another two": 2,
-				},
-				PtrOne: &strPtr,
-			},
-			"inn3":   "many inns!",
-			"ptr":    &strPtr,
-			"ptrNil": (*string)(nil),
-		},
-		FromNull: castFromNull,
-		CustomMapTypeMap: map[string]interface{}{
-			"custom1": CustomMapType{
-				"test": map[string]interface{}{
-					"asd": "lol",
-					"oh!": 4,
-				},
-			},
-		},
-		InnerWrapper: &InnerWrapper{
-			AnotherInner: &Inner{
-				Name: "soInner",
-				Maaaap: map[string]interface{}{
-					"teeeeest": 123,
-				},
-			},
-		},
-	}
-	ss := New(a)
-	ss.TranslateMapsToArrays = true
-	m := ss.Map()
-
-	require.Contains(t, m["ManyInners"], "inn3: (string)many inns!")
-	require.Contains(t, m["ManyInners"], "ptr: (string)Imma pointer")
-	require.Contains(t, m["ManyInners"], "ptrNil: (*string)<nil>")
-	require.Contains(t, m["ManyInners"], `inn1: (map[string]interface {})map[Maaaap:([]string)[empty: (map[string]interface {})<nil> fromNull: (map[string]interface {})map[remaining:(float64)42 usedDecimal:(interface {})<nil>] oh, another one: (int)1 weirdPtr: (map[string]interface {})map[idx:(*int)<nil> intOne:(*int)1 intZero:(*int)0 intfNil:(interface {})<nil>]] Name:(string)I am inner 1 NilMap:(*map[string]interface {})<nil> PtrOne:(*string)<nil> SensibleOne:(string)***]`)
-	require.Contains(t, m["ManyInners"], `inn2: (map[string]interface {})map[Maaaap:([]string)[oh, another two: (int)2] Name:(string)I am inner 2 NilMap:(*map[string]interface {})<nil> PtrOne:(*string)Imma pointer SensibleOne:(string)***]`)
-	require.Contains(t, m["FromNull"], "remaining: (float64)42")
-	require.Contains(t, m["FromNull"], "usedDecimal: (interface {})<nil>")
-	require.Contains(t, m["CustomMapTypeMap"], `custom1: (structs.CustomMapType)map[test:(map[string]interface {})map[asd:(string)lol oh!:(int)4]]`)
-
-	require.Contains(t, m["InnerWrapper"], "AnotherInner")
-	require.Contains(t, m["InnerWrapper"].(map[string]interface{})["AnotherInner"], "Maaaap")
-	require.Contains(t, m["InnerWrapper"].(map[string]interface{})["AnotherInner"].(map[string]interface{})["Maaaap"], `teeeeest: (int)123`)
-}
-
 func TestMap_OmitNested(t *testing.T) {
 	type A struct {
 		Name  string
@@ -483,7 +351,7 @@ func TestMap_NestedMapWithStringValues(t *testing.T) {
 		t.Errorf("Nested type of map should be of type map[string]interface{}, have %T", m["B"])
 	}
 
-	foo := in["Foo"].(map[string]string)
+	foo := in["Foo"].(map[string]interface{})
 	if name := foo["example_key"]; name != "example" {
 		t.Errorf("Map nested struct's name field should give example, got: %s", name)
 	}
@@ -550,8 +418,8 @@ func TestMap_NestedMapWithSliceIntValues(t *testing.T) {
 		t.Errorf("Nested type of map should be of type map[string]interface{}, have %T", m["B"])
 	}
 
-	foo := in["Foo"].(map[string][]int)
-	if name := foo["example_key"]; name[0] != 80 {
+	foo := in["Foo"].(map[string]interface{})
+	if name := foo["example_key"].([]interface{}); name[0] != 80 {
 		t.Errorf("Map nested struct's name field should give example, got: %v", name)
 	}
 }
@@ -673,9 +541,9 @@ func TestMap_NestedSliceWithIntValues(t *testing.T) {
 	}
 	m := Map(p)
 
-	ports, ok := m["ports"].([]int)
+	ports, ok := m["ports"].([]interface{})
 	if !ok {
-		t.Errorf("Nested type of map should be of type []int, have %T", m["ports"])
+		t.Errorf("Nested type of map should be of type []interface, have %T", m["ports"])
 	}
 
 	if ports[0] != 80 {
@@ -1611,9 +1479,15 @@ func TestTagYAML(t *testing.T) {
 		MyMap       map[string]interface{} `structs:",yaml"`
 	}
 
+	type Inner2 struct {
+		Value       string
+		AnotherName string `structs:",sensible"`
+	}
+
 	type A struct {
-		Name   string
-		Nested *Inner
+		Name    string
+		Nested  *Inner
+		Nested2 *Inner2 `structs:",yaml"`
 	}
 
 	a := A{
@@ -1627,14 +1501,44 @@ func TestTagYAML(t *testing.T) {
 				},
 			},
 		},
+		Nested2: &Inner2{
+			Value:       "hello123",
+			AnotherName: "blaaa234",
+		},
 	}
 
 	ss := New(a)
 	m := ss.Map()
 
-	require.Equal(t, m["Name"], "hello")
+	require.Equal(t, "hello", m["Name"])
 	require.Contains(t, m["Nested"], "AnotherName")
 	require.Contains(t, m["Nested"], "MyMap")
-	require.Equal(t, m["Nested"].(map[string]interface{})["AnotherName"], "ohhh")
-	require.Equal(t, m["Nested"].(map[string]interface{})["MyMap"], "test1: 123\ntest2:\n    yeee: lol")
+	require.Equal(t, "ohhh", m["Nested"].(map[string]interface{})["AnotherName"])
+	require.Equal(t, "test1: 123\ntest2:\n    yeee: lol", m["Nested"].(map[string]interface{})["MyMap"])
+	require.Equal(t, "AnotherName: '***'\nValue: hello123", m["Nested2"])
+}
+
+func TestTagYAMLSensible(t *testing.T) {
+	type Inner2 struct {
+		Value       string
+		AnotherName string `structs:",sensible"`
+	}
+
+	type A struct {
+		YAMLMap map[string]interface{} `structs:",yaml"`
+	}
+
+	a := A{
+		YAMLMap: map[string]interface{}{
+			"test1": &Inner2{
+				Value:       "hello123",
+				AnotherName: "blaaa234",
+			},
+		},
+	}
+
+	ss := New(a)
+	m := ss.Map()
+
+	require.Equal(t, "test1:\n    AnotherName: '***'\n    Value: hello123", m["YAMLMap"])
 }
